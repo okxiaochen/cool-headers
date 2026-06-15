@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=800">
+  <title>Cool Headers</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header Bar -->
+  <header class="header-bar">
+    <div class="header-left">
+      <h1 class="header-title">Cool Headers</h1>
+      <span id="active-badge" class="badge" title="Active rules for this site">0</span>
+    </div>
+    <button id="btn-open-tab" class="btn-open-tab" title="Open in a new tab for resizable full view">Open in Tab</button>
+  </header>
+
+  <!-- Active Rules Section -->
+  <section id="active-section" class="section" style="display:none">
+    <h2 class="section-title">Active on this page</h2>
+    <div id="active-rules" class="rule-cards"></div>
+  </section>
+
+  <!-- All Rules Section -->
+  <section class="section">
+    <h2 class="section-title">All Rules</h2>
+    <div id="all-rules" class="rule-list"></div>
+    <div id="empty-state" class="empty-state" style="display:none">
+      No rules yet. Click <strong>+ Add Rule</strong> to get started.
+    </div>
+  </section>
+
+  <!-- Footer Actions -->
+  <footer class="footer">
+    <button id="btn-add" class="btn btn-primary">+ Add Rule</button>
+    <div class="footer-right">
+      <button id="btn-import" class="btn btn-secondary">Import</button>
+      <button id="btn-export" class="btn btn-secondary">Export</button>
+    </div>
+  </footer>
+
+  <!-- Add/Edit Modal -->
+  <div id="modal-overlay" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 id="modal-title" class="modal-title">Add Rule</h2>
+
+      <label class="field-label">Rule Name</label>
+      <input id="rule-name" class="field-input" type="text" placeholder="e.g. Test Auth Headers">
+
+      <label class="field-label">URL Match Pattern</label>
+      <div class="pattern-row">
+        <input id="rule-pattern" class="field-input" type="text" placeholder="e.g. *://test.example.com/*">
+        <button id="btn-use-current" class="btn-use-current" title="Auto-fill from current tab URL">📍 Current</button>
+      </div>
+      <span class="field-hint">Use * as wildcard. Examples: *://*.example.com/* , *://localhost:3000/*</span>
+
+      <label class="field-label">Headers</label>
+      <div id="headers-table" class="headers-table">
+        <div class="headers-header">
+          <span>Name</span><span>Value</span><span>Op</span><span></span>
+        </div>
+        <div id="headers-rows"></div>
+      </div>
+      <button id="btn-add-header" class="btn btn-small">+ Add Header</button>
+
+      <div class="modal-actions">
+        <button id="btn-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="btn-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for import -->
+  <input id="file-import" type="file" accept=".json" style="display:none">
+
+  <script src="popup.js"></script>
+</body>
+</html>
