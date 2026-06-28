@@ -27,8 +27,17 @@ async function getRules() {
   return data.rules || [];
 }
 
+async function getGroupSettings() {
+  const data = await chrome.storage.sync.get("groupSettings");
+  return data.groupSettings || {};
+}
+
 async function saveRules(rules) {
   await chrome.storage.sync.set({ rules });
+}
+
+async function saveGroupSettings(groupSettings) {
+  await chrome.storage.sync.set({ groupSettings });
 }
 
 function generateId() {
@@ -154,10 +163,30 @@ async function renderActiveRules() {
     .join("");
 }
 
+function renderRuleRow(r) {
+  return `
+    <div class="rule-row ${r.enabled ? "" : "disabled"}" data-id="${escapeHtml(r.id)}">
+      <label class="toggle" title="${r.enabled ? "Disable" : "Enable"}">
+        <input type="checkbox" class="rule-toggle" data-id="${escapeHtml(r.id)}" ${r.enabled ? "checked" : ""} />
+        <span class="toggle-slider"></span>
+      </label>
+      <div class="rule-row-info">
+        <div class="rule-row-name">${escapeHtml(r.name)}</div>
+        <div class="rule-row-headers">${escapeHtml(formatRuleSummary(r))}</div>
+      </div>
+      <div class="rule-actions">
+        <button class="btn-icon btn-duplicate" data-id="${escapeHtml(r.id)}" title="Duplicate">⧉</button>
+        <button class="btn-icon btn-edit" data-id="${escapeHtml(r.id)}" title="Edit">✎</button>
+        <button class="btn-icon delete btn-delete" data-id="${escapeHtml(r.id)}" title="Delete">✕</button>
+      </div>
+    </div>`;
+}
+
 async function renderRules() {
   const container = document.getElementById("all-rules");
   const emptyState = document.getElementById("empty-state");
   const rules = await getRules();
+  const groupSettings = await getGroupSettings();
 
   if (rules.length === 0) {
     container.innerHTML = "";
@@ -166,36 +195,75 @@ async function renderRules() {
   }
 
   emptyState.style.display = "none";
-  container.innerHTML = rules
-    .map(
-      (r) => `
-    <div class="rule-row ${r.enabled ? "" : "disabled"}" data-id="${escapeHtml(r.id)}">
-      <label class="toggle" title="${r.enabled ? "Disable" : "Enable"}">
-        <input type="checkbox" class="rule-toggle" data-id="${escapeHtml(r.id)}" ${r.enabled ? "checked" : ""} />
-        <span class="toggle-slider"></span>
-      </label>
-      <div class="rule-row-info">
-        <div class="rule-row-name">${escapeHtml(r.name)}</div>
-        <div class="rule-row-pattern">${escapeHtml(r.matchPattern)}</div>
-        <div class="rule-row-headers">${escapeHtml(formatHeadersSummary(r.headers))}</div>
+
+  const groups = new Map();
+  for (const rule of rules) {
+    const pattern = rule.matchPattern;
+    if (!groups.has(pattern)) {
+      groups.set(pattern, []);
+    }
+    groups.get(pattern).push(rule);
+  }
+
+  const sortedPatterns = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+
+  container.innerHTML = sortedPatterns
+    .map((pattern) => {
+      const groupRules = groups.get(pattern);
+      const settings = groupSettings[pattern] || {};
+      const exclusive = !!settings.exclusive;
+      const collapsed = !!settings.collapsed;
+      const countLabel = groupRules.length === 1 ? "1 rule" : `${groupRules.length} rules`;
+
+      return `
+    <div class="rule-group ${collapsed ? "collapsed" : ""}" data-pattern="${escapeHtml(pattern)}">
+      <div class="rule-group-header">
+        <button class="btn-collapse" data-pattern="${escapeHtml(pattern)}" title="Collapse/expand">▼</button>
+        <span class="rule-group-pattern">${escapeHtml(pattern)}</span>
+        <span class="rule-group-count">${countLabel}</span>
+        <label class="group-exclusive" title="Only one rule in this group can be enabled at a time">
+          <input type="checkbox" class="group-exclusive-toggle" data-pattern="${escapeHtml(pattern)}" ${exclusive ? "checked" : ""} />
+          One at a time
+        </label>
       </div>
-      <div class="rule-actions">
-        <button class="btn-icon btn-edit" data-id="${escapeHtml(r.id)}" title="Edit">✎</button>
-        <button class="btn-icon delete btn-delete" data-id="${escapeHtml(r.id)}" title="Delete">✕</button>
+      <div class="rule-group-body">
+        ${groupRules.map((r) => renderRuleRow(r)).join("")}
       </div>
-    </div>`
-    )
+    </div>`;
+    })
     .join("");
 }
 
+function formatRuleSummary(rule) {
+  const parts = [];
+  if (rule.headers && rule.headers.length > 0) {
+    parts.push(formatHeadersSummary(rule.headers));
+  }
+  if (rule.queryParams && rule.queryParams.length > 0) {
+    parts.push(formatQuerySummary(rule.queryParams));
+  }
+  return parts.length > 0 ? parts.join(" · ") : "No modifications";
+}
+
 function formatHeadersSummary(headers) {
-  if (!headers || headers.length === 0) return "No headers";
+  if (!headers || headers.length === 0) return "";
   return headers
     .map((h) => {
       if (h.operation === "remove") return `${h.name}: (remove)`;
       return `${h.name}: ${h.value}`;
     })
     .join(" · ");
+}
+
+function formatQuerySummary(queryParams) {
+  if (!queryParams || queryParams.length === 0) return "";
+  const summary = queryParams
+    .map((q) => {
+      if (q.operation === "remove") return `?${q.name} (remove)`;
+      return `?${q.name}=${q.value}`;
+    })
+    .join(" · ");
+  return `Query: ${summary}`;
 }
 
 function escapeHtml(str) {
@@ -214,9 +282,19 @@ function openEditor(rule) {
 
   const headersRows = document.getElementById("headers-rows");
   headersRows.innerHTML = "";
-  const headers = rule && rule.headers ? rule.headers : [{ name: "", value: "", operation: "set" }];
+  const headers = rule && rule.headers && rule.headers.length > 0
+    ? rule.headers
+    : [{ name: "", value: "", operation: "set" }];
   headers.forEach((h) => addHeaderRow(h));
 
+  const queryRows = document.getElementById("query-rows");
+  queryRows.innerHTML = "";
+  const queryParams = rule && rule.queryParams ? rule.queryParams : [];
+  if (queryParams.length > 0) {
+    queryParams.forEach((q) => addQueryRow(q));
+  }
+
+  updateBothWarning();
   document.getElementById("modal-overlay").style.display = "flex";
 }
 
@@ -242,16 +320,62 @@ function addHeaderRow(header = { name: "", value: "", operation: "set" }) {
     const valueInput = row.querySelector(".header-value");
     valueInput.disabled = e.target.value === "remove";
     if (e.target.value === "remove") valueInput.value = "";
+    updateBothWarning();
   });
 
   row.querySelector(".btn-remove").addEventListener("click", () => {
     const list = document.getElementById("headers-rows");
     if (list.children.length > 1) {
       row.remove();
+      updateBothWarning();
     }
   });
 
+  row.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("input", updateBothWarning);
+  });
+
   document.getElementById("headers-rows").appendChild(row);
+}
+
+function addQueryRow(queryParam = { name: "", value: "", operation: "set" }) {
+  const row = document.createElement("div");
+  row.className = "header-row query-row";
+  row.innerHTML = `
+    <input type="text" class="query-name" placeholder="Param name" value="${escapeHtml(queryParam.name)}" />
+    <input type="text" class="query-value" placeholder="Value" value="${escapeHtml(queryParam.value)}" ${queryParam.operation === "remove" ? "disabled" : ""} />
+    <select class="query-op">
+      <option value="set" ${queryParam.operation === "set" ? "selected" : ""}>Set</option>
+      <option value="remove" ${queryParam.operation === "remove" ? "selected" : ""}>Remove</option>
+    </select>
+    <button class="btn-remove" title="Remove query param">✕</button>
+  `;
+
+  row.querySelector(".query-op").addEventListener("change", (e) => {
+    const valueInput = row.querySelector(".query-value");
+    valueInput.disabled = e.target.value === "remove";
+    if (e.target.value === "remove") valueInput.value = "";
+    updateBothWarning();
+  });
+
+  row.querySelector(".btn-remove").addEventListener("click", () => {
+    row.remove();
+    updateBothWarning();
+  });
+
+  row.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("input", updateBothWarning);
+  });
+
+  document.getElementById("query-rows").appendChild(row);
+  updateBothWarning();
+}
+
+function updateBothWarning() {
+  const headers = collectHeadersFromEditor();
+  const queryParams = collectQueryFromEditor();
+  const warning = document.getElementById("both-warning");
+  warning.style.display = headers.length > 0 && queryParams.length > 0 ? "block" : "none";
 }
 
 function collectHeadersFromEditor() {
@@ -268,17 +392,57 @@ function collectHeadersFromEditor() {
   return headers;
 }
 
+function collectQueryFromEditor() {
+  const rows = document.querySelectorAll("#query-rows .query-row");
+  const queryParams = [];
+  rows.forEach((row) => {
+    const name = row.querySelector(".query-name").value.trim();
+    const operation = row.querySelector(".query-op").value;
+    const value = row.querySelector(".query-value").value;
+    if (name) {
+      queryParams.push({ name, value, operation });
+    }
+  });
+  return queryParams;
+}
+
+function ruleHasModifications(headers, queryParams) {
+  return headers.length > 0 || queryParams.length > 0;
+}
+
+async function enforceExclusiveForPattern(rules, pattern, enabledRuleId) {
+  const groupSettings = await getGroupSettings();
+  if (!groupSettings[pattern]?.exclusive) return rules;
+
+  return rules.map((r) => {
+    if (r.matchPattern !== pattern) return r;
+    return { ...r, enabled: r.id === enabledRuleId };
+  });
+}
+
+async function enforceExclusiveOnGroupEnable(rules, pattern) {
+  const enabledInGroup = rules.filter((r) => r.matchPattern === pattern && r.enabled);
+  if (enabledInGroup.length <= 1) return rules;
+
+  const keepId = enabledInGroup[0].id;
+  return rules.map((r) => {
+    if (r.matchPattern !== pattern) return r;
+    return { ...r, enabled: r.id === keepId };
+  });
+}
+
 async function saveRuleFromEditor() {
   const name = document.getElementById("rule-name").value.trim();
   const matchPattern = document.getElementById("rule-pattern").value.trim();
   const headers = collectHeadersFromEditor();
+  const queryParams = collectQueryFromEditor();
 
   if (!name || !matchPattern) {
     alert("Please fill in rule name and URL pattern.");
     return;
   }
-  if (headers.length === 0) {
-    alert("Please add at least one header.");
+  if (!ruleHasModifications(headers, queryParams)) {
+    alert("Please add at least one header or query parameter.");
     return;
   }
 
@@ -287,7 +451,7 @@ async function saveRuleFromEditor() {
   if (editingRuleId) {
     const idx = rules.findIndex((r) => r.id === editingRuleId);
     if (idx >= 0) {
-      rules[idx] = { ...rules[idx], name, matchPattern, headers };
+      rules[idx] = { ...rules[idx], name, matchPattern, headers, queryParams };
     }
   } else {
     rules.push({
@@ -296,11 +460,41 @@ async function saveRuleFromEditor() {
       enabled: true,
       matchPattern,
       headers,
+      queryParams,
     });
   }
 
-  await saveRules(rules);
+  let updatedRules = rules;
+  const savedRule = editingRuleId
+    ? rules.find((r) => r.id === editingRuleId)
+    : rules[rules.length - 1];
+
+  if (savedRule?.enabled) {
+    updatedRules = await enforceExclusiveForPattern(rules, matchPattern, savedRule.id);
+  }
+
+  await saveRules(updatedRules);
   closeEditor();
+  await renderRules();
+  await renderActiveRules();
+}
+
+async function duplicateRule(ruleId) {
+  const rules = await getRules();
+  const source = rules.find((r) => r.id === ruleId);
+  if (!source) return;
+
+  const copy = {
+    ...source,
+    id: generateId(),
+    name: source.name + " (Copy)",
+    enabled: false,
+    headers: source.headers ? source.headers.map((h) => ({ ...h })) : [],
+    queryParams: source.queryParams ? source.queryParams.map((q) => ({ ...q })) : [],
+  };
+
+  rules.push(copy);
+  await saveRules(rules);
   await renderRules();
   await renderActiveRules();
 }
@@ -309,7 +503,11 @@ async function saveRuleFromEditor() {
 
 async function exportRules() {
   const rules = await getRules();
-  const blob = new Blob([JSON.stringify({ rules }, null, 2)], { type: "application/json" });
+  const groupSettings = await getGroupSettings();
+  const blob = new Blob(
+    [JSON.stringify({ rules, groupSettings }, null, 2)],
+    { type: "application/json" }
+  );
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -329,6 +527,7 @@ async function importRules(file) {
 
     const existing = await getRules();
     const existingIds = new Set(existing.map((r) => r.id));
+    const existingGroupSettings = await getGroupSettings();
     let added = 0;
 
     for (const rule of data.rules) {
@@ -336,6 +535,11 @@ async function importRules(file) {
       existing.push(rule);
       existingIds.add(rule.id);
       added++;
+    }
+
+    if (data.groupSettings && typeof data.groupSettings === "object") {
+      Object.assign(existingGroupSettings, data.groupSettings);
+      await saveGroupSettings(existingGroupSettings);
     }
 
     await saveRules(existing);
@@ -353,7 +557,11 @@ function bindEvents() {
   document.getElementById("btn-add").addEventListener("click", () => openEditor(null));
   document.getElementById("btn-cancel").addEventListener("click", closeEditor);
   document.getElementById("btn-save").addEventListener("click", saveRuleFromEditor);
-  document.getElementById("btn-add-header").addEventListener("click", () => addHeaderRow());
+  document.getElementById("btn-add-header").addEventListener("click", () => {
+    addHeaderRow();
+    updateBothWarning();
+  });
+  document.getElementById("btn-add-query").addEventListener("click", () => addQueryRow());
 
   document.getElementById("btn-use-current").addEventListener("click", () => {
     if (currentTabUrl) {
@@ -384,6 +592,23 @@ function bindEvents() {
   document.getElementById("all-rules").addEventListener("click", async (e) => {
     const editBtn = e.target.closest(".btn-edit");
     const deleteBtn = e.target.closest(".btn-delete");
+    const duplicateBtn = e.target.closest(".btn-duplicate");
+    const collapseBtn = e.target.closest(".btn-collapse");
+
+    if (collapseBtn) {
+      const pattern = collapseBtn.dataset.pattern;
+      const groupSettings = await getGroupSettings();
+      const current = groupSettings[pattern] || {};
+      groupSettings[pattern] = { ...current, collapsed: !current.collapsed };
+      await saveGroupSettings(groupSettings);
+      await renderRules();
+      return;
+    }
+
+    if (duplicateBtn) {
+      await duplicateRule(duplicateBtn.dataset.id);
+      return;
+    }
 
     if (editBtn) {
       const rules = await getRules();
@@ -401,15 +626,41 @@ function bindEvents() {
   });
 
   document.getElementById("all-rules").addEventListener("change", async (e) => {
-    if (e.target.classList.contains("rule-toggle")) {
-      const rules = await getRules();
-      const rule = rules.find((r) => r.id === e.target.dataset.id);
-      if (rule) {
-        rule.enabled = e.target.checked;
+    if (e.target.classList.contains("group-exclusive-toggle")) {
+      const pattern = e.target.dataset.pattern;
+      const groupSettings = await getGroupSettings();
+      groupSettings[pattern] = {
+        ...(groupSettings[pattern] || {}),
+        exclusive: e.target.checked,
+      };
+      await saveGroupSettings(groupSettings);
+
+      if (e.target.checked) {
+        let rules = await getRules();
+        rules = await enforceExclusiveOnGroupEnable(rules, pattern);
         await saveRules(rules);
         await renderRules();
         await renderActiveRules();
       }
+      return;
+    }
+
+    if (e.target.classList.contains("rule-toggle")) {
+      const rules = await getRules();
+      const rule = rules.find((r) => r.id === e.target.dataset.id);
+      if (!rule) return;
+
+      if (e.target.checked) {
+        rule.enabled = true;
+        const updated = await enforceExclusiveForPattern(rules, rule.matchPattern, rule.id);
+        await saveRules(updated);
+      } else {
+        rule.enabled = false;
+        await saveRules(rules);
+      }
+
+      await renderRules();
+      await renderActiveRules();
     }
   });
 }

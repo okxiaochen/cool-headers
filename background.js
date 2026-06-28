@@ -86,34 +86,75 @@ function patternToRegex(pattern) {
   return regex;
 }
 
+function ruleHasModifications(rule) {
+  const hasHeaders = rule.headers && rule.headers.length > 0;
+  const hasQuery = rule.queryParams && rule.queryParams.length > 0;
+  return hasHeaders || hasQuery;
+}
+
 function storedRuleToDnrRules(rule) {
-  if (!rule.enabled || !rule.headers || rule.headers.length === 0) {
+  if (!rule.enabled || !ruleHasModifications(rule)) {
     return [];
   }
 
-  const requestHeaders = rule.headers.map((h) => {
-    if (h.operation === "remove") {
-      return { header: h.name, operation: "remove" };
-    }
-    return { header: h.name, operation: "set", value: h.value };
-  });
-
   const regexFilter = patternToRegex(rule.matchPattern);
+  const condition = { regexFilter, resourceTypes: RESOURCE_TYPES };
+  const dnrRules = [];
 
-  return [
-    {
-      id: hashToId(rule.id),
-      priority: 1,
-      action: {
-        type: "modifyHeaders",
-        requestHeaders,
-      },
-      condition: {
-        regexFilter,
-        resourceTypes: RESOURCE_TYPES,
-      },
-    },
-  ];
+  const hasHeaders = rule.headers && rule.headers.length > 0;
+  const hasQuery = rule.queryParams && rule.queryParams.length > 0;
+
+  if (hasHeaders) {
+    const requestHeaders = rule.headers.map((h) => {
+      if (h.operation === "remove") {
+        return { header: h.name, operation: "remove" };
+      }
+      return { header: h.name, operation: "set", value: h.value };
+    });
+
+    dnrRules.push({
+      id: hashToId(rule.id + ":h"),
+      priority: hasQuery ? 2 : 1,
+      action: { type: "modifyHeaders", requestHeaders },
+      condition,
+    });
+  }
+
+  if (hasQuery) {
+    const addOrReplaceParams = [];
+    const removeParams = [];
+
+    for (const qp of rule.queryParams) {
+      if (!qp.name) continue;
+      if (qp.operation === "remove") {
+        removeParams.push(qp.name);
+      } else {
+        addOrReplaceParams.push({ key: qp.name, value: qp.value || "" });
+      }
+    }
+
+    if (addOrReplaceParams.length > 0 || removeParams.length > 0) {
+      const queryTransform = {};
+      if (addOrReplaceParams.length > 0) {
+        queryTransform.addOrReplaceParams = addOrReplaceParams;
+      }
+      if (removeParams.length > 0) {
+        queryTransform.removeParams = removeParams;
+      }
+
+      dnrRules.push({
+        id: hashToId(rule.id + ":q"),
+        priority: hasHeaders ? 1 : 1,
+        action: {
+          type: "redirect",
+          redirect: { transform: { queryTransform } },
+        },
+        condition,
+      });
+    }
+  }
+
+  return dnrRules;
 }
 
 async function rebuildSessionRules() {

@@ -196,11 +196,106 @@ body.tab-mode .section {
   word-break: break-all;
 }
 
-/* Rule List */
+/* Rule Groups */
 .rule-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+}
+
+.rule-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.rule-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.rule-group.collapsed .rule-group-header {
+  border-bottom: none;
+}
+
+.rule-group.collapsed .rule-group-body {
+  display: none;
+}
+
+.btn-collapse {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.btn-collapse:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.rule-group.collapsed .btn-collapse {
+  transform: rotate(-90deg);
+}
+
+.rule-group-pattern {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.rule-group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.group-exclusive {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.group-exclusive input {
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.rule-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.rule-group-body .rule-row {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rule-group-body .rule-row:last-child {
+  border-bottom: none;
 }
 
 .rule-row {
@@ -465,6 +560,24 @@ body.tab-mode .modal {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+.field-warning {
+  display: block;
+  font-size: 12px;
+  color: #b45309;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.12);
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .field-warning {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+  }
 }
 
 /* Pattern field with "Use current" button */

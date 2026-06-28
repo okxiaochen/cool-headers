@@ -64,6 +64,19 @@
       </div>
       <button id="btn-add-header" class="btn btn-small">+ Add Header</button>
 
+      <label class="field-label">Query Parameters</label>
+      <div id="query-table" class="headers-table query-table">
+        <div class="headers-header">
+          <span>Name</span><span>Value</span><span>Op</span><span></span>
+        </div>
+        <div id="query-rows"></div>
+      </div>
+      <button id="btn-add-query" class="btn btn-small">+ Add Query Param</button>
+      <span class="field-hint">Add or remove URL query parameters on matching requests.</span>
+      <span id="both-warning" class="field-warning" style="display:none">
+        Chrome applies one network rule per request. If both headers and query params are set, only headers apply — use separate rules for both.
+      </span>
+
       <div class="modal-actions">
         <button id="btn-cancel" class="btn btn-secondary">Cancel</button>
         <button id="btn-save" class="btn btn-primary">Save</button>

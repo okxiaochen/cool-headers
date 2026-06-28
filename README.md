@@ -9,7 +9,11 @@ Tools like ModHeader require you to manually switch between profiles when moving
 ## Features
 
 - **URL-pattern-based rules** — match URL patterns, headers apply automatically
+- **Query parameters** — add or remove URL query params on matching requests
 - **Enable/disable toggle** — turn individual rules on or off
+- **Rule groups** — rules with the same URL pattern are grouped together
+- **One-at-a-time mode** — per group, optionally allow only one enabled rule at a time
+- **Duplicate rules** — quickly copy an existing rule
 - **Active rules indicator** — badge on the icon + popup section showing active rules for the current tab
 - **Import/export** — share or backup rules as JSON
 - **Header operations** — Set and Remove
@@ -32,7 +36,18 @@ Tools like ModHeader require you to manually switch between profiles when moving
    - **Rule Name** — e.g. "Test Auth Headers"
    - **URL Match Pattern** — e.g. `*://test.example.com/*` (click 📍 to auto-fill from current tab)
    - **Headers** — add name/value pairs with Set or Remove operations
+   - **Query Parameters** (optional) — add or remove URL query params
 4. Click **Save**
+
+> **Note:** Chrome applies one network rule per request. If a single rule has both headers and query params, only headers will apply. Use separate rules if you need both on the same URL.
+
+### Rule Groups
+
+Rules that share the same URL match pattern are shown together in a group. Each group has a **One at a time** option — when enabled, turning on one rule in the group automatically disables the others. Useful for switching between environments or auth tokens on the same domain.
+
+### Duplicate a Rule
+
+Click the **⧉** button on any rule to create a copy. The duplicate starts disabled so you can tweak it before enabling.
 
 ### URL Match Patterns
 
@@ -72,9 +87,15 @@ Both rules can be active at the same time. Visit test.example.com and the test c
       "headers": [
         { "name": "Cookie", "value": "session=test-token", "operation": "set" },
         { "name": "X-Debug", "value": "", "operation": "remove" }
+      ],
+      "queryParams": [
+        { "name": "debug", "value": "true", "operation": "set" }
       ]
     }
-  ]
+  ],
+  "groupSettings": {
+    "*://test.example.com/*": { "exclusive": true, "collapsed": false }
+  }
 }
 ```
 
